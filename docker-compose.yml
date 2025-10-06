@@ -1,0 +1,37 @@
+version: '3'
+services:
+  app-8081:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8081:8080
+    volumes:
+      - petclinic_data:/app/data
+
+  app-8082:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8082:8080
+    volumes:
+      - petclinic_data:/app/data
+    environment:
+      SPRING_PROFILES_ACTIVE: postgres
+      POSTGRES_URL: jdbc:postgresql://db/petclinic
+    depends_on:
+      - db
+
+  db:
+    image: postgres:17.5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: petclinic
+      POSTGRES_PASSWORD: petclinic
+      POSTGRES_DB: petclinic
+
+volumes:
+  petclinic_data:
+  postgres_data:
