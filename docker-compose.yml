@@ -1,18 +1,14 @@
 version: '3'
 services:
   app-8081:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: mutemip/petclinic:latest
     ports:
       - 8081:8080
     volumes:
       - petclinic_data:/app/data
 
   app-8082:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: mutemip/petclinic:latest
     ports:
       - 8082:8080
     volumes:
