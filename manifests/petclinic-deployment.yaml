@@ -15,43 +15,36 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: mutemip/petclinic-v2:latest
+        image: mutemip/petclinic:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
           name: http
         env:
         - name: SPRING_PROFILES_ACTIVE
-          valueFrom:
-            configMapKeyRef:
-              name: petclinic-config
-              key: SPRING_PROFILES_ACTIVE
+          value: "postgres"
         - name: SPRING_DATASOURCE_URL
-          valueFrom:
-            configMapKeyRef:
-              name: petclinic-config
-              key: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/petclinic"
         - name: SPRING_DATASOURCE_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secret
-              key: mysql-user
+          value: "petclinic"
         - name: SPRING_DATASOURCE_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secret
-              key: mysql-password
+          value: "petclinic"
         readinessProbe:
           httpGet:
             path: /
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /
             port: 8080
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service

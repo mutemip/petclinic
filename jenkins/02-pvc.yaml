@@ -1,3 +1,21 @@
+---
+# Create the PersistentVolume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jenkins-home-pv
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  hostPath:
+    path: /data/jenkins-home
+    type: DirectoryOrCreate
+
+---
+# Create the PersistentVolumeClaim
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -5,7 +23,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: standard
   resources:
     requests:
       storage: 20Gi
-  storageClassName: standard

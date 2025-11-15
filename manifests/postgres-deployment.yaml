@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_USER
+          value: "petclinic"
+        - name: POSTGRES_PASSWORD
+          value: "petclinic"
+        - name: POSTGRES_DB
+          value: "petclinic"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pg_isready -U petclinic
+          initialDelaySeconds: 15
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pg_isready -U petclinic
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: postgres-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: default
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None

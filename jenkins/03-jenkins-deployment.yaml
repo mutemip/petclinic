@@ -13,10 +13,33 @@ spec:
         app: jenkins
     spec:
       serviceAccountName: jenkins
+      # Add DNS configuration
+      dnsPolicy: Default
+      dnsConfig:
+        nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
+        options:
+          - name: ndots
+            value: "2"
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+      - name: volume-permissions
+        image: busybox:latest
+        command: ['sh', '-c', 'chown -R 1000:1000 /var/jenkins_home']
+        volumeMounts:
+        - name: jenkins-home
+          mountPath: /var/jenkins_home
+        securityContext:
+          runAsUser: 0
       containers:
       - name: jenkins
-        image: jenkins/jenkins:2.387.3-lts-jdk11
+        image: jenkins/jenkins:lts
         imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
         ports:
         - containerPort: 8080
           name: http
@@ -27,6 +50,9 @@ spec:
           value: "--httpPort=8080"
         - name: JAVA_OPTS
           value: "-Xmx1024m -Xms512m"
+        # Add Jenkins update center URL
+        - name: JENKINS_UC
+          value: "http://updates.jenkins.io"
         volumeMounts:
         - name: jenkins-home
           mountPath: /var/jenkins_home
