@@ -1,0 +1,41 @@
+---
+# Service for Jenkins Web UI (NodePort)
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30000
+    protocol: TCP
+    name: http
+  - port: 50000
+    targetPort: 50000
+    nodePort: 30001
+    protocol: TCP
+    name: jnlp
+  selector:
+    app: jenkins
+
+---
+# ClusterIP Service for internal Jenkins communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins-internal
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 50000
+    targetPort: 50000
+    protocol: TCP
+    name: jnlp
+  selector:
+    app: jenkins
