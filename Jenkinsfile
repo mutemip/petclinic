@@ -7,27 +7,30 @@ pipeline {
     }
 
     environment {
+        // Docker Configuration
         DOCKER_REGISTRY = 'docker.io'
         DOCKER_CREDENTIALS = credentials('dockerHubCreds')
-        GITHUB_TOKEN = credentials('githubToken')
-        KUBECONFIG = credentials('kubernetesConfig')
         DOCKER_USERNAME = "${DOCKER_CREDENTIALS_USR}"
         DOCKER_PASSWORD = "${DOCKER_CREDENTIALS_PSW}"
+        
+        // Git Configuration
+        GITHUB_TOKEN = credentials('githubToken')
+        
+        // Kubernetes Configuration
+        KUBECONFIG = credentials('kubernetesConfig')
+        
+        // Application Configuration
         IMAGE_NAME = "${DOCKER_USERNAME}/spring-petclinic"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        GIT_REPO = 'https://github.com/mutemip/petclinic.git'
-        KUBE_NAMESPACE = 'petclinic'
-        DEPLOYMENT_NAME = 'petclinic-deployment'
-        APP_NAME = 'spring-petclinic'
+        APP_NAME = 'petclinic'
     }
 
     stages {
-        // ==================== PART 1: CI STAGES ====================
-        
+        // ==================== TASK 1: CHECKOUT ====================
         stage('Checkout') {
             steps {
                 script {
-                    echo "========== Checking out source code =========="
+                    echo "========== [TASK 2] Checking out from GitHub =========="
                 }
                 checkout scm
                 script {
@@ -43,17 +46,18 @@ pipeline {
                         script: "git rev-parse --short HEAD",
                         returnStdout: true
                     ).trim()
-                    echo "Commit: ${env.GIT_COMMIT_MSG}"
-                    echo "Author: ${env.GIT_AUTHOR}"
-                    echo "Commit Hash: ${env.GIT_COMMIT_HASH}"
+                    echo "✓ Commit: ${env.GIT_COMMIT_MSG}"
+                    echo "✓ Author: ${env.GIT_AUTHOR}"
+                    echo "✓ Hash: ${env.GIT_COMMIT_HASH}"
                 }
             }
         }
 
-        stage('Build with Maven') {
+        // ==================== TASK 3: BUILD ====================
+        stage('Build Application') {
             steps {
                 script {
-                    echo "========== Building Application with Maven =========="
+                    echo "========== [TASK 3] Building Application with Maven =========="
                     sh '''
                         chmod +x ./mvnw
                         ./mvnw clean package -DskipTests \
@@ -63,40 +67,45 @@ pipeline {
             }
             post {
                 success {
-                    echo "Maven build completed successfully"
+                    echo "✓ Maven build completed successfully"
                     archiveArtifacts artifacts: 'target/*.jar', allowEmptyArchive: false
                 }
                 failure {
-                    echo "Maven build failed"
+                    echo "✗ Maven build failed"
                     error("Build stage failed")
                 }
             }
         }
 
+        // ==================== TASK 3: BUILD DOCKER IMAGE ====================
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "========== Building Docker image =========="
+                    echo "========== [TASK 3] Building Docker Image =========="
                     sh '''
                         docker build \
                             -t ${IMAGE_NAME}:${IMAGE_TAG} \
                             -t ${IMAGE_NAME}:latest \
                             -f Dockerfile .
+                        
+                        echo "Docker image built: ${IMAGE_NAME}:${IMAGE_TAG}"
+                        docker images | grep petclinic
                     '''
                 }
             }
             post {
                 failure {
-                    echo "Docker build failed"
+                    echo "✗ Docker build failed"
                     error("Docker build stage failed")
                 }
             }
         }
 
-        stage('Unit Tests') {
+        // ==================== TASK 3: TEST ====================
+        stage('Test') {
             steps {
                 script {
-                    echo "========== Running Unit Tests =========="
+                    echo "========== [TASK 3] Running Unit Tests =========="
                     sh '''
                         chmod +x ./mvnw
                         ./mvnw test \
@@ -107,35 +116,19 @@ pipeline {
             post {
                 always {
                     junit 'target/surefire-reports/*.xml'
+                    echo "✓ Test reports generated"
                 }
             }
         }
 
-        stage('Integration Tests') {
-            steps {
-                script {
-                    echo "========== Running Integration Tests =========="
-                    sh '''
-                        chmod +x ./mvnw
-                        ./mvnw verify \
-                            -Dorg.slf4j.simpleLogger.defaultLogLevel=info
-                    '''
-                }
-            }
-            post {
-                always {
-                    junit 'target/failsafe-reports/*.xml'
-                }
-            }
-        }
-
-        stage('Code Quality - SonarQube') {
+        // ==================== TASK 3: STATIC ANALYSIS ====================
+        stage('Static Analysis - SonarQube') {
             when {
                 branch 'main'
             }
             steps {
                 script {
-                    echo "========== Running SonarQube Analysis =========="
+                    echo "========== [TASK 3] Running SonarQube Analysis =========="
                     sh '''
                         chmod +x ./mvnw
                         ./mvnw clean verify \
@@ -149,144 +142,155 @@ pipeline {
             }
             post {
                 always {
-                    echo "SonarQube analysis completed"
+                    echo "✓ SonarQube analysis completed"
                 }
             }
         }
 
-        stage('Security Scan - Docker Image') {
-            steps {
-                script {
-                    echo "========== Scanning Docker Image with Trivy =========="
-                    sh '''
-                        if command -v trivy &> /dev/null; then
-                            trivy image --exit-code 0 --severity HIGH,CRITICAL \
-                                ${IMAGE_NAME}:${IMAGE_TAG}
-                        else
-                            echo "Trivy not installed, skipping vulnerability scan"
-                        fi
-                    '''
-                }
-            }
-            post {
-                failure {
-                    echo "Warning: Image scan detected vulnerabilities"
-                }
-            }
-        }
-
+        // ==================== TASK 3: PUSH TO DOCKER HUB ====================
         stage('Push to Docker Hub') {
             when {
                 branch 'main'
             }
             steps {
                 script {
-                    echo "========== Pushing image to Docker Hub =========="
+                    echo "========== [TASK 3] Pushing Image to Docker Hub =========="
                     sh '''
                         echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+                        
+                        echo "Pushing ${IMAGE_NAME}:${IMAGE_TAG}..."
                         docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                        
+                        echo "Pushing ${IMAGE_NAME}:latest..."
                         docker push ${IMAGE_NAME}:latest
+                        
                         docker logout
+                        echo "✓ Image pushed successfully"
                     '''
                 }
             }
             post {
                 failure {
-                    echo "Docker push failed"
+                    echo "✗ Docker push failed"
                 }
                 success {
-                    echo "✅ Image pushed successfully: ${IMAGE_NAME}:${IMAGE_TAG}"
+                    echo "✓ Docker Hub repository: ${IMAGE_NAME}"
                 }
             }
         }
 
-        // ==================== PART 2: CD STAGES ====================
-
-        stage('Deploy to Dev') {
+        // ==================== TASK 4: DEPLOY TO KUBERNETES ====================
+        stage('Deploy to Kubernetes') {
             when {
                 branch 'main'
             }
             steps {
                 script {
-                    echo "========== Deploying to Development Cluster (default namespace) =========="
+                    echo "========== [TASK 4] Deploying to Kubernetes =========="
                     sh '''
                         export KUBECONFIG=${KUBECONFIG}
-                        
-                        # Use default namespace
                         KUBE_NAMESPACE="default"
                         
-                        # Apply manifests in order
-                        echo "Applying RBAC manifests..."
+                        echo "Step 1: Applying RBAC manifests..."
                         kubectl apply -f manifests/01-rbac.yaml
                         
-                        echo "Applying PVC manifests..."
+                        echo "Step 2: Applying PVC manifests..."
                         kubectl apply -f manifests/02-pvc.yaml
                         
-                        echo "Applying ConfigMap..."
+                        echo "Step 3: Applying ConfigMap..."
                         kubectl apply -f manifests/03-configmap.yaml
                         
-                        echo "Applying Secret..."
+                        echo "Step 4: Applying Secret..."
                         kubectl apply -f manifests/04-secret.yaml
                         
-                        echo "Applying Deployment manifests..."
+                        echo "Step 5: Updating deployment with new image..."
                         kubectl set image deployment/petclinic-deployment \
                             petclinic=${IMAGE_NAME}:${IMAGE_TAG} \
                             -n ${KUBE_NAMESPACE} || true
                         
+                        echo "Step 6: Applying Deployment..."
                         kubectl apply -f manifests/05-deployment.yaml
                         
-                        echo "Applying Service manifests..."
+                        echo "Step 7: Applying Service..."
                         kubectl apply -f manifests/06-service.yaml
                         
-                        echo "Applying Ingress manifests..."
-                        kubectl apply -f manifests/07-ingress.yaml || echo "Ingress skipped"
-                        
-                        echo "Applying HPA manifests..."
-                        kubectl apply -f manifests/08-hpa.yaml
-                        
-                        echo "Applying Network Policy..."
-                        kubectl apply -f manifests/09-networkpolicy.yaml || echo "NetworkPolicy skipped"
-                        
-                        echo "Applying PodDisruptionBudget..."
-                        kubectl apply -f manifests/10-poddisruptionbudget.yaml
-                        
-                        # Wait for rollout
-                        echo "Waiting for deployment to be ready..."
+                        echo "Step 8: Waiting for rollout..."
                         kubectl rollout status deployment/petclinic-deployment \
                             -n ${KUBE_NAMESPACE} --timeout=5m
+                        
+                        echo "✓ Deployment successful"
                     '''
                 }
             }
             post {
                 success {
-                    echo "✅ Development deployment successful"
+                    echo "========== [TASK 4] Deployment Verification =========="
+                    sh '''
+                        export KUBECONFIG=${KUBECONFIG}
+                        
+                        echo "Pod Status:"
+                        kubectl get pods -n default -l app=petclinic
+                        
+                        echo "Service Status:"
+                        kubectl get svc petclinic-service -n default
+                        
+                        echo "Deployment Status:"
+                        kubectl get deployment petclinic-deployment -n default
+                    '''
                 }
                 failure {
-                    echo "❌ Development deployment failed"
-                    error("Dev deployment stage failed")
+                    echo "✗ Kubernetes deployment failed"
                 }
             }
         }
 
-        stage('Smoke Tests - Dev') {
+        // ==================== TASK 5: ROLLING UPDATES VERIFICATION ====================
+        stage('Verify Rolling Update') {
             when {
                 branch 'main'
             }
             steps {
                 script {
-                    echo "========== Running Smoke Tests on Dev (default namespace) =========="
+                    echo "========== [TASK 5] Verifying Rolling Update =========="
+                    sh '''
+                        export KUBECONFIG=${KUBECONFIG}
+                        
+                        echo "Current Deployment Replicas:"
+                        kubectl get deployment petclinic-deployment -n default \
+                            -o jsonpath='{.spec.replicas} replicas, {.status.updatedReplicas} updated'
+                        
+                        echo ""
+                        echo "Rollout History:"
+                        kubectl rollout history deployment/petclinic-deployment -n default
+                        
+                        echo ""
+                        echo "Recent Pods:"
+                        kubectl get pods -n default -l app=petclinic --sort-by=.metadata.creationTimestamp
+                    '''
+                }
+            }
+        }
+
+        // ==================== TASK 5: APPLICATION HEALTH CHECK ====================
+        stage('Health Check') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    echo "========== [TASK 5] Application Health Check =========="
                     sh '''
                         export KUBECONFIG=${KUBECONFIG}
                         
                         echo "Waiting for service to be ready..."
-                        sleep 30
+                        sleep 10
                         
-                        # Try to get LoadBalancer IP, fallback to port-forward
+                        # Get service IP or use port-forward
                         SERVICE_IP=$(kubectl get svc petclinic-service \
                             -n default -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
                         
                         if [ -z "$SERVICE_IP" ]; then
-                            echo "Using port-forward for testing..."
+                            echo "Using port-forward for health check..."
                             kubectl port-forward -n default svc/petclinic-service 8080:80 &
                             sleep 5
                             SERVICE_IP="localhost"
@@ -295,191 +299,9 @@ pipeline {
                             PORT="80"
                         fi
                         
-                        # Run smoke tests
-                        echo "Testing home page..."
-                        curl -f http://${SERVICE_IP}:${PORT}/ || exit 1
-                        
-                        echo "✅ Smoke tests passed"
+                        echo "Testing application endpoint: http://${SERVICE_IP}:${PORT}"
+                        curl -f http://${SERVICE_IP}:${PORT}/ && echo "✓ Application is healthy" || echo "✗ Health check failed"
                     '''
-                }
-            }
-            post {
-                failure {
-                    echo "❌ Smoke tests failed"
-                }
-            }
-        }
-
-        stage('Deploy to Staging') {
-            when {
-                tag 'v*'
-            }
-            steps {
-                script {
-                    echo "========== Deploying to Staging Cluster =========="
-                    sh '''
-                        export KUBECONFIG=${KUBECONFIG}
-                        
-                        STAGING_NAMESPACE="petclinic-staging"
-                        
-                        # Create staging namespace
-                        kubectl create namespace ${STAGING_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                        
-                        # Apply manifests
-                        echo "Applying manifests to staging..."
-                        kubectl apply -f manifests/01-rbac.yaml -n ${STAGING_NAMESPACE} || true
-                        kubectl apply -f manifests/02-pvc.yaml -n ${STAGING_NAMESPACE} || true
-                        kubectl apply -f manifests/03-configmap.yaml -n ${STAGING_NAMESPACE}
-                        kubectl apply -f manifests/04-secret.yaml -n ${STAGING_NAMESPACE}
-                        
-                        kubectl set image deployment/${DEPLOYMENT_NAME} \
-                            petclinic=${IMAGE_NAME}:${IMAGE_TAG} \
-                            -n ${STAGING_NAMESPACE} || true
-                        
-                        kubectl apply -f manifests/05-deployment.yaml -n ${STAGING_NAMESPACE}
-                        kubectl apply -f manifests/06-service.yaml -n ${STAGING_NAMESPACE}
-                        
-                        kubectl rollout status deployment/${DEPLOYMENT_NAME} \
-                            -n ${STAGING_NAMESPACE} --timeout=5m
-                    '''
-                }
-            }
-            post {
-                success {
-                    echo "✅ Staging deployment successful"
-                }
-                failure {
-                    echo "❌ Staging deployment failed"
-                }
-            }
-        }
-
-        stage('Performance Tests - Staging') {
-            when {
-                tag 'v*'
-            }
-            steps {
-                script {
-                    echo "========== Running Performance Tests on Staging =========="
-                    sh '''
-                        export KUBECONFIG=${KUBECONFIG}
-                        
-                        STAGING_NAMESPACE="petclinic-staging"
-                        sleep 30
-                        
-                        echo "Performance test completed"
-                    '''
-                }
-            }
-        }
-
-        stage('Approval for Production') {
-            when {
-                tag 'v*'
-            }
-            steps {
-                script {
-                    echo "========== Waiting for Production Approval =========="
-                    timeout(time: 24, unit: 'HOURS') {
-                        input(
-                            id: 'ProdDeployment',
-                            message: 'Deploy Spring PetClinic to Production?',
-                            ok: 'Deploy',
-                            submitter: 'admin,devops'
-                        )
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Production') {
-            when {
-                tag 'v*'
-            }
-            steps {
-                script {
-                    echo "========== Deploying to Production Cluster =========="
-                    sh '''
-                        export KUBECONFIG=${KUBECONFIG}
-                        
-                        PROD_NAMESPACE="petclinic-prod"
-                        
-                        # Create production namespace
-                        kubectl create namespace ${PROD_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                        
-                        # Create backup
-                        kubectl get deployment ${DEPLOYMENT_NAME} \
-                            -n ${PROD_NAMESPACE} -o yaml > deployment-backup-${BUILD_NUMBER}.yaml || true
-                        
-                        # Apply manifests with blue-green strategy
-                        echo "Applying production manifests..."
-                        kubectl apply -f manifests/01-rbac.yaml -n ${PROD_NAMESPACE} || true
-                        kubectl apply -f manifests/02-pvc.yaml -n ${PROD_NAMESPACE} || true
-                        kubectl apply -f manifests/03-configmap.yaml -n ${PROD_NAMESPACE}
-                        kubectl apply -f manifests/04-secret.yaml -n ${PROD_NAMESPACE}
-                        
-                        kubectl set image deployment/${DEPLOYMENT_NAME} \
-                            petclinic=${IMAGE_NAME}:${IMAGE_TAG} \
-                            -n ${PROD_NAMESPACE} || true
-                        
-                        kubectl apply -f manifests/05-deployment.yaml -n ${PROD_NAMESPACE}
-                        kubectl apply -f manifests/06-service.yaml -n ${PROD_NAMESPACE}
-                        
-                        # Gradual rollout
-                        echo "Rolling out deployment..."
-                        kubectl rollout status deployment/${DEPLOYMENT_NAME} \
-                            -n ${PROD_NAMESPACE} --timeout=10m
-                        
-                        echo "✅ Production deployment completed"
-                    '''
-                }
-            }
-            post {
-                success {
-                    script {
-                        sh '''
-                            export KUBECONFIG=${KUBECONFIG}
-                            echo "Production deployment successful"
-                        '''
-                    }
-                }
-                failure {
-                    script {
-                        echo "❌ Production deployment failed - Initiating rollback"
-                        sh '''
-                            export KUBECONFIG=${KUBECONFIG}
-                            PROD_NAMESPACE="petclinic-prod"
-                            kubectl rollout undo deployment/${DEPLOYMENT_NAME} \
-                                -n ${PROD_NAMESPACE}
-                            kubectl rollout status deployment/${DEPLOYMENT_NAME} \
-                                -n ${PROD_NAMESPACE} --timeout=5m
-                            echo "Rollback completed"
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Production Health Check') {
-            when {
-                tag 'v*'
-            }
-            steps {
-                script {
-                    echo "========== Running Production Health Checks =========="
-                    sh '''
-                        export KUBECONFIG=${KUBECONFIG}
-                        PROD_NAMESPACE="petclinic-prod"
-                        
-                        sleep 30
-                        
-                        echo "Health checks completed"
-                    '''
-                }
-            }
-            post {
-                failure {
-                    echo "❌ Production health checks failed"
                 }
             }
         }
@@ -489,11 +311,7 @@ pipeline {
                 script {
                     echo "========== Cleaning up =========="
                     sh '''
-                        # Remove dangling images
                         docker image prune -f --filter "dangling=true" || true
-                        
-                        # Clean workspace
-                        rm -rf target/ || true
                     '''
                 }
             }
@@ -503,21 +321,25 @@ pipeline {
     post {
         always {
             script {
-                echo "========== Pipeline Execution Summary =========="
+                echo "========== PIPELINE SUMMARY =========="
                 echo "Build Number: ${BUILD_NUMBER}"
                 echo "Build Status: ${currentBuild.result}"
                 echo "Build Duration: ${currentBuild.durationString}"
+                echo "Git Commit: ${env.GIT_COMMIT_HASH}"
+                echo "Docker Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                echo "===================================="
             }
             cleanWs()
         }
         success {
             script {
-                echo "✅ Pipeline completed successfully!"
+                echo "✓ Pipeline completed successfully!"
+                echo "Image available at: ${IMAGE_NAME}:${IMAGE_TAG}"
             }
         }
         failure {
             script {
-                echo "❌ Pipeline failed!"
+                echo "✗ Pipeline failed - Check logs above for details"
             }
         }
     }

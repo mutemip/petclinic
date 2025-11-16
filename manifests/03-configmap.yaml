@@ -6,8 +6,5 @@ metadata:
 data:
   application.properties: |
     spring.application.name=PetClinic
-    spring.jpa.database=H2
-    spring.h2.console.enabled=true
     server.port=8080
-    logging.level.root=INFO
-    logging.level.org.springframework.samples.petclinic=DEBUG
+    spring.jpa.database=H2
