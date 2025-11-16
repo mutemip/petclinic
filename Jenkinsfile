@@ -28,6 +28,7 @@ pipeline {
             command:
             - cat
             tty: true
+            imagePullPolicy: IfNotPresent
           - name: kaniko
             image: gcr.io/kaniko-project/executor:slim
             command: ["/busybox/cat"]
@@ -77,8 +78,10 @@ pipeline {
             steps {
                 container('git') {
                     withCredentials([string(credentialsId: 'githubToken', variable: 'GITHUB_TOKEN')]) {
-                        git url: 'https://${GITHUB_TOKEN}@github.com/mutemip/petclinic.git',
-                        branch: 'main'
+                        sh '''
+                            git clone https://${GITHUB_TOKEN}@github.com/mutemip/petclinic.git .
+                            git checkout main
+                        '''
                     }
                 }
             }
