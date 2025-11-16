@@ -60,7 +60,7 @@ pipeline {
                     echo "========== [TASK 3] Building Application with Maven =========="
                     sh '''
                         chmod +x ./mvnw
-                        ./mvnw clean package -DskipTests \
+                        ./mvnw package -DskipTests \
                             -Dorg.slf4j.simpleLogger.defaultLogLevel=info
                     '''
                 }
