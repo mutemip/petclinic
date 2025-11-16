@@ -1,5 +1,5 @@
 pipeline {
-    agent {
+        agent {
         kubernetes {
             cloud 'kubernetes'
             yaml '''
@@ -9,37 +9,45 @@ pipeline {
           labels:
             app: test
         spec:
+          serviceAccountName: default
           containers:
           - name: maven
-            image: maven:3.9-eclipse-temurin-25
+            image: maven:3.9-eclipse-temurin-17-alpine
             command:
             - cat
             tty: true
+            imagePullPolicy: IfNotPresent
+            env:
+            - name: JENKINS_URL
+              value: "http://jenkins.default.svc.cluster.local:8080/"
             volumeMounts:
             - mountPath: "/root/.m2/repository"
               name: cache
           - name: git
-            image: bitnami/git:latest
+            image: alpine/git:latest
             command:
             - cat
             tty: true
           - name: kaniko
-            image: gcr.io/kaniko-project/executor:debug
+            image: gcr.io/kaniko-project/executor:slim
             command: ["/busybox/cat"]
             tty: true
+            imagePullPolicy: IfNotPresent
             volumeMounts:
             - name: docker-config
               mountPath: /kaniko/.docker
           - name: sonarcli
-            image: sonarsource/sonar-scanner-cli:latest
+            image: sonarsource/sonar-scanner-cli:5.0-alpine
             command:
             - cat
             tty: true
+            imagePullPolicy: IfNotPresent
           - name: kubectl-helm-cli
-            image: kunchalavikram/kubectl_helm_cli:latest
+            image: bitnami/kubectl:latest
             command:
             - cat
             tty: true
+            imagePullPolicy: IfNotPresent
           volumes:
           - name: cache
             persistentVolumeClaim:
