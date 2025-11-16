@@ -172,7 +172,7 @@ pipeline {
             }
             steps {
                 container('kubectl-helm-cli') {
-                    withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
+                    withKubeConfig(credentialsId: 'kubernetes') {
                         sh "kubectl apply -f k8-deployment.yaml"
                     }
                 }
