@@ -43,7 +43,7 @@ spec:
     }
     
     environment {
-        DOCKER_HUB_REPO = '<YOUR_DOCKERHUB_USERNAME>/petclinic'
+        DOCKER_HUB_REPO = 'mutemip/petclinic'
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
         GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
         IMAGE_TAG = "${env.BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
@@ -65,7 +65,7 @@ spec:
                 container('maven') {
                     sh '''
                         echo "Building Spring Boot application..."
-                        mvn clean package -DskipTests
+                        mvn package -DskipTests
                     '''
                 }
             }
