@@ -67,8 +67,10 @@ pipeline {
             }
             steps {
                 container('git') {
-                    git url: 'https://github.com/mutemip/petclinic',
-                    branch: 'main'
+                    withCredentials([string(credentialsId: 'githubToken', variable: 'GITHUB_TOKEN')]) {
+                        git url: 'https://${GITHUB_TOKEN}@github.com/mutemip/petclinic.git',
+                        branch: 'main'
+                    }
                 }
             }
         }
@@ -147,14 +149,18 @@ pipeline {
             }
             steps {
                 container('kaniko') {
-                    sh """
-                /kaniko/executor \
-                  --context=\${WORKSPACE} \
-                  --dockerfile=Dockerfile \
-                  --destination=${IMAGE_NAME}:${IMAGE_TAG} \
-                  --destination=${IMAGE_NAME}:latest \
-                  --cache=true
-            """
+                    withCredentials([file(credentialsId: 'dockerCreds', variable: 'DOCKER_CONFIG_FILE')]) {
+                        sh '''
+                        mkdir -p /kaniko/.docker
+                        cp ${DOCKER_CONFIG_FILE} /kaniko/.docker/config.json
+                        /kaniko/executor \
+                          --context=${WORKSPACE} \
+                          --dockerfile=Dockerfile \
+                          --destination=${IMAGE_NAME}:${IMAGE_TAG} \
+                          --destination=${IMAGE_NAME}:latest \
+                          --cache=true
+                        '''
+                    }
                 }
             }
         }
