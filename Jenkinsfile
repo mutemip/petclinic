@@ -43,11 +43,10 @@ spec:
     }
     
     environment {
-        DOCKER_HUB_REPO = 'mutemip/petclinic'
+        DOCKER_HUB_REPO = '<YOUR_DOCKERHUB_USERNAME>/petclinic'
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
         GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-        // IMAGE_TAG = "${env.BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
-        IMAGE_TAG = "latest"
+        IMAGE_TAG = "${env.BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
     }
     
     stages {
@@ -66,7 +65,7 @@ spec:
                 container('maven') {
                     sh '''
                         echo "Building Spring Boot application..."
-                        mvn package -DskipTests
+                        mvn clean package -DskipTests
                     '''
                 }
             }
@@ -118,13 +117,24 @@ spec:
         stage('Push to Docker Hub') {
             steps {
                 container('docker') {
-                    script {
-                        docker.withRegistry('https://registry.hub.docker.com', DOCKER_CREDENTIALS_ID) {
-                            sh '''
-                                docker push ${DOCKER_HUB_REPO}:${IMAGE_TAG}
-                                docker push ${DOCKER_HUB_REPO}:latest
-                            '''
-                        }
+                    withCredentials([usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh '''
+                            echo "Logging in to Docker Hub..."
+                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                            
+                            echo "Pushing image: ${DOCKER_HUB_REPO}:${IMAGE_TAG}"
+                            docker push ${DOCKER_HUB_REPO}:${IMAGE_TAG}
+                            
+                            echo "Pushing image: ${DOCKER_HUB_REPO}:latest"
+                            docker push ${DOCKER_HUB_REPO}:latest
+                            
+                            docker logout
+                            echo "Push completed successfully!"
+                        '''
                     }
                 }
             }
