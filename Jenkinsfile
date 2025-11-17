@@ -20,22 +20,15 @@ spec:
     volumeMounts:
     - name: maven-cache
       mountPath: /root/.m2
-  - name: docker
-    image: docker:24-dind
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
     command:
-    - dockerd
+    - sleep
     args:
-    - --host=unix:///var/run/docker.sock
-    - --host=tcp://0.0.0.0:2375
-    - --storage-driver=overlay2
-    securityContext:
-      privileged: true
-    env:
-    - name: DOCKER_TLS_CERTDIR
-      value: ""
+    - 99d
     volumeMounts:
-    - name: docker-sock
-      mountPath: /var/run
+    - name: docker-config
+      mountPath: /kaniko/.docker
   - name: kubectl
     image: bitnami/kubectl:latest
     command:
@@ -45,7 +38,7 @@ spec:
   volumes:
   - name: maven-cache
     emptyDir: {}
-  - name: docker-sock
+  - name: docker-config
     emptyDir: {}
 '''
         }
@@ -110,39 +103,26 @@ spec:
             }
         }
         
-        stage('Build Docker Image') {
+        stage('Build & Push Docker Image') {
             steps {
-                container('docker') {
-                    sh '''
-                        dockerd &
-                        sleep 10
-                        docker build -t ${DOCKER_HUB_REPO}:${IMAGE_TAG} .
-                        docker tag ${DOCKER_HUB_REPO}:${IMAGE_TAG} ${DOCKER_HUB_REPO}:latest
-                    '''
-                }
-            }
-        }
-        
-        stage('Push to Docker Hub') {
-            steps {
-                container('docker') {
+                container('kaniko') {
                     withCredentials([usernamePassword(
                         credentialsId: 'dockerhub-credentials',
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
                         sh '''
-                            echo "Logging in to Docker Hub..."
-                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                            # Create Docker config for authentication
+                            echo "{\\"auths\\":{\\"https://index.docker.io/v1/\\":{\\"auth\\":\\"$(echo -n ${DOCKER_USER}:${DOCKER_PASS} | base64)\\"}}}" > /kaniko/.docker/config.json
                             
-                            echo "Pushing image: ${DOCKER_HUB_REPO}:${IMAGE_TAG}"
-                            docker push ${DOCKER_HUB_REPO}:${IMAGE_TAG}
-                            
-                            echo "Pushing image: ${DOCKER_HUB_REPO}:latest"
-                            docker push ${DOCKER_HUB_REPO}:latest
-                            
-                            docker logout
-                            echo "Push completed successfully!"
+                            # Build and push with Kaniko
+                            /kaniko/executor \
+                                --context=${WORKSPACE} \
+                                --dockerfile=${WORKSPACE}/Dockerfile \
+                                --destination=${DOCKER_HUB_REPO}:${IMAGE_TAG} \
+                                --destination=${DOCKER_HUB_REPO}:latest \
+                                --cache=true \
+                                --cleanup
                         '''
                     }
                 }
@@ -174,16 +154,14 @@ spec:
     
     post {
         success {
-            echo "Pipeline completed successfully!"
+            echo "Pipeline completed successfully! 🎉"
             echo "Application deployed with image: ${DOCKER_HUB_REPO}:${IMAGE_TAG}"
         }
         failure {
-            echo "Pipeline failed!"
+            echo "Pipeline failed! 😞"
         }
         always {
             echo "Cleaning up workspace..."
-            // cleanWs() requires Workspace Cleanup plugin
-            // Alternatively, just let Kubernetes handle cleanup
         }
     }
 }
