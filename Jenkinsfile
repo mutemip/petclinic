@@ -43,10 +43,10 @@ spec:
     }
     
     environment {
-        DOCKER_HUB_REPO = '<YOUR_DOCKERHUB_USERNAME>/petclinic'
+        DOCKER_HUB_REPO = 'mutemip/springpetclinic'
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
         GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
-        IMAGE_TAG = "${env.BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
+        IMAGE_TAG = "latest"
     }
     
     stages {
