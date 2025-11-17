@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: mutemip/petclinic:latest
+        image: mutemip/springpetclinic:latest
         ports:
         - containerPort: 8080
         resources:

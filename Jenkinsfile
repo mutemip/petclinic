@@ -22,8 +22,17 @@ spec:
       mountPath: /root/.m2
   - name: docker
     image: docker:24-dind
+    command:
+    - dockerd
+    args:
+    - --host=unix:///var/run/docker.sock
+    - --host=tcp://0.0.0.0:2375
+    - --storage-driver=overlay2
     securityContext:
       privileged: true
+    env:
+    - name: DOCKER_TLS_CERTDIR
+      value: ""
     volumeMounts:
     - name: docker-sock
       mountPath: /var/run
@@ -165,11 +174,11 @@ spec:
     
     post {
         success {
-            echo "Pipeline completed successfully! 🎉"
+            echo "Pipeline completed successfully!"
             echo "Application deployed with image: ${DOCKER_HUB_REPO}:${IMAGE_TAG}"
         }
         failure {
-            echo "Pipeline failed! 😞"
+            echo "Pipeline failed!"
         }
         always {
             echo "Cleaning up workspace..."
